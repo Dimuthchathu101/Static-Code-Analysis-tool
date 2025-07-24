@@ -60,63 +60,177 @@ def is_large_image(path, content):
         return False
     return False
 
+# --- Helper to create a standardized issue dict ---
+def make_issue(issue_type, location, message, severity=None, line=None, context=None, column=None):
+    if line is None or line == '' or line == '-':
+        line = 'N/A'
+    if not severity:
+        severity_map = {
+            'SEO_MISSING_TITLE': 'error',
+            'SEO_MISSING_DESCRIPTION': 'warning',
+            'SEO_MISSING_CANONICAL': 'warning',
+            'SEO_MISSING_OG': 'warning',
+            'SEO_MISSING_TWITTER': 'info',
+            'SEO_MISSING_ROBOTS': 'info',
+            'SEO_MISSING_SITEMAP': 'info',
+            'SEO_MISSING_STRUCTURED': 'info',
+            'SEO_MISSING_MICRODATA': 'info',
+            'HTML_LARGE_IMAGE': 'warning',
+            'HTML_IMG_NO_LAZY': 'info',
+            'HTML_UNMINIFIED_INLINE_SCRIPT': 'info',
+            'HTML_UNMINIFIED_INLINE_STYLE': 'info',
+            'HTML_DEPRECATED_TAG': 'warning',
+            'HTML_MISSING_ALT': 'info',
+            'HTML_MISSING_ARIA': 'info',
+            'HTML_INPUT_NO_LABEL': 'info',
+            'HTML_HEADING_ORDER': 'info',
+            'SEO_MISSING_H1': 'warning',
+            'SEO_MULTIPLE_H1': 'warning',
+            'HTML_BROKEN_LINK': 'error',
+            'HTML_BROKEN_IMG': 'error',
+            'CSS_SPECIFICITY_WAR': 'warning',
+            'CSS_DEEP_SELECTOR': 'info',
+            'CSS_ID_SELECTOR': 'info',
+            'CSS_NONSTANDARD_PROPERTY': 'info',
+            'CSS_IMPORTANT_OVERUSE': 'info',
+            'CSS_COMPLEX_SELECTOR': 'warning',
+            'CSS_DUPLICATE_SELECTOR': 'info',
+            'CSS_LARGE_FILE': 'warning',
+            'CSS_EXCESSIVE_IMPORT': 'info',
+            'CSS_UNMINIFIED': 'info',
+            'CSS_PARSING_ERROR': 'error',
+            'JS_SYNTAX_ERROR': 'error',
+            'JS_DEPRECATED_API': 'warning',
+            'JS_LARGE_BUNDLE': 'warning',
+            'JS_SYNC_XHR': 'warning',
+            'JS_BLOCKING_SCRIPT': 'warning',
+            'JS_MODERN_SYNTAX': 'info',
+            'JS_ESLINT': 'warning',
+            'JS_ESLINT_ERROR': 'error',
+            'REACT_MISSING_KEY': 'warning',
+            'REACT_DEPRECATED_LIFECYCLE': 'warning',
+            'REACT_DIRECT_DOM': 'warning',
+            'ANGULAR_MISSING_TRACKBY': 'info',
+            'PY_FLAKE8': 'warning',
+            'PY_FLAKE8_ERROR': 'error',
+            'FLASK_DEBUG_MODE': 'warning',
+            'FLASK_HARDCODED_SECRET': 'error',
+            'PHP_PARSE_ERROR': 'error',
+            'PHP_LINT_ERROR': 'error',
+            'PHP_EVAL': 'warning',
+            'PHP_MYSQL_DEPRECATED': 'warning',
+            'PHP_UNVALIDATED_INPUT': 'warning',
+            'PKG_OLD_DEP': 'info',
+            'PKG_DEPRECATED_DEP': 'warning',
+            'PKG_PARSE_ERROR': 'error',
+            'ENV_POTENTIAL_SECRET': 'warning',
+            'ENV_PARSE_ERROR': 'error',
+            'ANGULAR_NO_OPTIMIZATION': 'info',
+            'ANGULAR_JSON_ERROR': 'error',
+            'TEXT_TODO_FIXME': 'info',
+            'TEXT_POTENTIAL_SECRET': 'warning',
+            'TEXT_DEBUG_FLAG': 'info',
+            'NETWORK_ERROR': 'info',
+            'ROBOTS_DISALLOW': 'info',
+            'SEC_INSECURE_REQUEST': 'warning',
+            'SEC_INLINE_SCRIPT': 'warning',
+            'SEC_INLINE_STYLE': 'warning',
+            'PERF_LARGE_FILE': 'warning',
+            'CSS_UNUSED_SELECTOR': 'info',
+            'JS_DANGEROUS_FUNCTION': 'warning',
+        }
+        severity = severity_map.get(issue_type, 'Info')
+    return {
+        'type': issue_type,
+        'location': location,
+        'message': message,
+        'severity': severity,
+        'line': line,
+        'context': context,
+        'column': column
+    }
+
+# --- Helper to find line number in HTML ---
+def find_line_number_in_html(raw_html, tag_str):
+    idx = raw_html.find(tag_str)
+    if idx == -1:
+        return '-'
+    return raw_html[:idx].count('\n') + 1
+
+# --- Helper to find line number in JS/JSX/TSX ---
+def find_line_number_in_js(js_content, pattern):
+    for i, line in enumerate(js_content.splitlines(), 1):
+        if re.search(pattern, line):
+            return i
+    return '-'
+
+# --- Helper to find line number in any text file ---
+def find_line_number_in_text(content, pattern_or_snippet):
+    """Return the first line number (1-based) where pattern_or_snippet appears, or '-' if not found."""
+    for i, line in enumerate(content.splitlines(), 1):
+        if pattern_or_snippet in line or (hasattr(pattern_or_snippet, 'search') and pattern_or_snippet.search(line)):
+            return i
+    return '-'
+
 # --- Advanced SEO and HTML Performance ---
-def analyze_html_content(content, location, options):
+def analyze_html_content(content, location, options, raw_html=None):
     issues = []
     soup = BeautifulSoup(content, 'html.parser')
+    raw_html = raw_html or content
+    # For line number, use the raw HTML
     # SEO: canonical
     if not soup.find('link', rel='canonical'):
-        issues.append(('SEO_MISSING_CANONICAL', location, 'Missing canonical tag'))
+        issues.append(make_issue('SEO_MISSING_CANONICAL', location, 'Missing canonical tag', line=find_line_number_in_text(raw_html, '<link rel="canonical"')))
     # SEO: Open Graph/Twitter
     if not soup.find('meta', property='og:title'):
-        issues.append(('SEO_MISSING_OG', location, 'Missing Open Graph meta'))
+        issues.append(make_issue('SEO_MISSING_OG', location, 'Missing Open Graph meta', line=find_line_number_in_text(raw_html, '<meta property="og:title"')))
     if not soup.find('meta', attrs={'name': 'twitter:card'}):
-        issues.append(('SEO_MISSING_TWITTER', location, 'Missing Twitter meta'))
+        issues.append(make_issue('SEO_MISSING_TWITTER', location, 'Missing Twitter meta', line=find_line_number_in_text(raw_html, '<meta name="twitter:card"')))
     # SEO: robots meta
     if not soup.find('meta', attrs={'name': 'robots'}):
-        issues.append(('SEO_MISSING_ROBOTS', location, 'Missing robots meta'))
+        issues.append(make_issue('SEO_MISSING_ROBOTS', location, 'Missing robots meta', line=find_line_number_in_text(raw_html, '<meta name="robots"')))
     # SEO: sitemap
     if not soup.find('link', rel='sitemap'):
-        issues.append(('SEO_MISSING_SITEMAP', location, 'Missing sitemap link'))
+        issues.append(make_issue('SEO_MISSING_SITEMAP', location, 'Missing sitemap link', line=find_line_number_in_text(raw_html, '<link rel="sitemap"')))
     # SEO: structured data
     if not soup.find('script', type='application/ld+json'):
-        issues.append(('SEO_MISSING_STRUCTURED', location, 'Missing JSON-LD structured data'))
+        issues.append(make_issue('SEO_MISSING_STRUCTURED', location, 'Missing JSON-LD structured data', line=find_line_number_in_text(raw_html, '<script type="application/ld+json"')))
     # SEO: microdata
     if not soup.find(attrs={'itemscope': True}):
-        issues.append(('SEO_MISSING_MICRODATA', location, 'Missing microdata'))
+        issues.append(make_issue('SEO_MISSING_MICRODATA', location, 'Missing microdata', line=find_line_number_in_text(raw_html, '<itemscope')))
     # Performance: large images, missing loading=lazy
     for img in soup.find_all('img'):
         src = img.get('src')
         if src and (src.startswith('http') or src.startswith('data:image')):
             if is_large_image(src, content):
-                issues.append(('HTML_LARGE_IMAGE', location, f'Large image: {src}'))
+                issues.append(make_issue('HTML_LARGE_IMAGE', location, f'Large image: {src}', line=find_line_number_in_text(raw_html, str(img))))
         if not img.get('loading') == 'lazy':
-            issues.append(('HTML_IMG_NO_LAZY', location, f'Image missing loading=lazy: {src}'))
+            issues.append(make_issue('HTML_IMG_NO_LAZY', location, f'Image missing loading=lazy: {src}', line=find_line_number_in_text(raw_html, str(img))))
     # Performance: unminified inline scripts/styles
     for script in soup.find_all('script', src=False):
         if script.string and not is_minified(script.string):
-            issues.append(('HTML_UNMINIFIED_INLINE_SCRIPT', location, 'Unminified inline script'))
+            issues.append(make_issue('HTML_UNMINIFIED_INLINE_SCRIPT', location, 'Unminified inline script', line=find_line_number_in_text(raw_html, str(script))))
     for style in soup.find_all('style'):
         if style.string and not is_minified(style.string):
-            issues.append(('HTML_UNMINIFIED_INLINE_STYLE', location, 'Unminified inline style'))
+            issues.append(make_issue('HTML_UNMINIFIED_INLINE_STYLE', location, 'Unminified inline style', line=find_line_number_in_text(raw_html, str(style))))
     # Deprecated tags
     deprecated_tags = ['center', 'font', 'marquee']
     for tag in deprecated_tags:
         for found in soup.find_all(tag):
-            issues.append(('HTML_DEPRECATED_TAG', location, f"Deprecated HTML tag <{tag}> used"))
+            issues.append(make_issue('HTML_DEPRECATED_TAG', location, f"Deprecated HTML tag <{tag}> used", line=find_line_number_in_text(raw_html, str(found))))
     # Accessibility: missing aria (skip)
     # Accessibility: label/input (skip)
     # Accessibility: heading order (skip)
     # SEO: title, meta description, h1 count
     if not soup.find('title'):
-        issues.append(('SEO_MISSING_TITLE', location, "Missing <title> tag"))
+        issues.append(make_issue('SEO_MISSING_TITLE', location, "Missing <title> tag", line=find_line_number_in_text(raw_html, '<title>')))
     if not soup.find('meta', attrs={'name': 'description'}):
-        issues.append(('SEO_MISSING_DESCRIPTION', location, "Missing meta description"))
+        issues.append(make_issue('SEO_MISSING_DESCRIPTION', location, "Missing meta description", line=find_line_number_in_text(raw_html, '<meta name="description"')))
     h1s = soup.find_all('h1')
     if len(h1s) == 0:
-        issues.append(('SEO_MISSING_H1', location, "No <h1> tag found"))
+        issues.append(make_issue('SEO_MISSING_H1', location, "No <h1> tag found", line=find_line_number_in_text(raw_html, '<h1>')))
     elif len(h1s) > 1:
-        issues.append(('SEO_MULTIPLE_H1', location, "Multiple <h1> tags found"))
+        issues.append(make_issue('SEO_MULTIPLE_H1', location, "Multiple <h1> tags found", line=find_line_number_in_text(raw_html, '<h1>')))
     # Broken links
     for a in soup.find_all('a', href=True):
         href = a['href']
@@ -125,9 +239,9 @@ def analyze_html_content(content, location, options):
         try:
             r = requests.head(href, allow_redirects=True, timeout=5)
             if r.status_code >= 400:
-                issues.append(('HTML_BROKEN_LINK', href, f"Broken link: {r.status_code}"))
+                issues.append(make_issue('HTML_BROKEN_LINK', href, f"Broken link: {r.status_code}", line=find_line_number_in_text(raw_html, str(a))))
         except Exception as e:
-            issues.append(('HTML_BROKEN_LINK', href, f"Broken link: {str(e)}"))
+            issues.append(make_issue('HTML_BROKEN_LINK', href, f"Broken link: {str(e)}", line=find_line_number_in_text(raw_html, str(a))))
     for img in soup.find_all('img', src=True):
         src = img['src']
         if not is_absolute(src):
@@ -135,9 +249,9 @@ def analyze_html_content(content, location, options):
         try:
             r = requests.head(src, allow_redirects=True, timeout=5)
             if r.status_code >= 400:
-                issues.append(('HTML_BROKEN_IMG', src, f"Broken image: {r.status_code}"))
+                issues.append(make_issue('HTML_BROKEN_IMG', src, f"Broken image: {r.status_code}", line=find_line_number_in_text(raw_html, str(img))))
         except Exception as e:
-            issues.append(('HTML_BROKEN_IMG', src, f"Broken image: {str(e)}"))
+            issues.append(make_issue('HTML_BROKEN_IMG', src, f"Broken image: {str(e)}", line=find_line_number_in_text(raw_html, str(img))))
     return issues
 
 # --- Advanced CSS Analysis ---
@@ -148,8 +262,9 @@ def css_specificity(selector):
     element_count = len(re.findall(r'\b[a-zA-Z]+\b', selector))
     return (id_count, class_count, element_count)
 
-def analyze_css_content(content, location, options):
+def analyze_css_content(content, location, options, raw_content=None):
     issues = []
+    raw_content = raw_content or content
     try:
         sheet = cssutils.parseString(content)
         selectors_seen = set()
@@ -161,70 +276,73 @@ def analyze_css_content(content, location, options):
                 specificity_map[selector] = spec
                 # Specificity wars
                 if spec[0] > 2 or spec[1] > 5:
-                    issues.append(('CSS_SPECIFICITY_WAR', location, f'Selector {selector} has high specificity {spec}'))
+                    issues.append(make_issue('CSS_SPECIFICITY_WAR', location, f'Selector {selector} has high specificity {spec}', line=find_line_number_in_text(raw_content, str(rule))))
                 # Deep selectors
                 if selector.count(' ') > 4:
-                    issues.append(('CSS_DEEP_SELECTOR', location, f'Deep selector: {selector}'))
+                    issues.append(make_issue('CSS_DEEP_SELECTOR', location, f'Deep selector: {selector}', line=find_line_number_in_text(raw_content, str(rule))))
                 # Use of IDs
                 if '#' in selector:
-                    issues.append(('CSS_ID_SELECTOR', location, f'ID selector: {selector}'))
+                    issues.append(make_issue('CSS_ID_SELECTOR', location, f'ID selector: {selector}', line=find_line_number_in_text(raw_content, str(rule))))
                 # Non-standard properties
                 for prop in rule.style:
                     if prop.name.startswith('-') and not prop.name.startswith('--'):
-                        issues.append(('CSS_NONSTANDARD_PROPERTY', location, f'Non-standard property: {prop.name}'))
+                        issues.append(make_issue('CSS_NONSTANDARD_PROPERTY', location, f'Non-standard property: {prop.name}', line=find_line_number_in_text(raw_content, str(rule))))
                 # !important
                 for prop in rule.style:
                     if '!important' in prop.value:
-                        issues.append(('CSS_IMPORTANT_OVERUSE', location, "Use of !important in CSS"))
+                        issues.append(make_issue('CSS_IMPORTANT_OVERUSE', location, "Use of !important in CSS", line=find_line_number_in_text(raw_content, str(rule))))
                 # Selector depth
                 if options.max_selector_depth is not None:
                     depth = max(selector.count(' '), selector.count('>'))
                     if depth > options.max_selector_depth:
-                        issues.append(('CSS_COMPLEX_SELECTOR', location, f"Overly complex selector: {selector}"))
+                        issues.append(make_issue('CSS_COMPLEX_SELECTOR', location, f"Overly complex selector: {selector}", line=find_line_number_in_text(raw_content, str(rule))))
                 # Duplicate selectors
                 if selector in selectors_seen:
-                    issues.append(('CSS_DUPLICATE_SELECTOR', location, f"Duplicate selector: {selector}"))
+                    issues.append(make_issue('CSS_DUPLICATE_SELECTOR', location, f"Duplicate selector: {selector}", line=find_line_number_in_text(raw_content, str(rule))))
                 selectors_seen.add(selector)
+                # Track selectors for unused check
+                self.used_selectors.add(selector)
         # Large file
         if len(content) > 100*1024:
-            issues.append(('CSS_LARGE_FILE', location, f'CSS file > 100KB'))
+            issues.append(make_issue('CSS_LARGE_FILE', location, f'CSS file > 100KB', line=find_line_number_in_text(raw_content, '/*')))
         # Excessive @import
         if content.count('@import') > 3:
-            issues.append(('CSS_EXCESSIVE_IMPORT', location, 'Excessive @import usage'))
+            issues.append(make_issue('CSS_EXCESSIVE_IMPORT', location, 'Excessive @import usage', line=find_line_number_in_text(raw_content, '/*')))
         # Non-minified CSS
         if not is_minified(content):
-            issues.append(('CSS_UNMINIFIED', location, 'Non-minified CSS'))
+            issues.append(make_issue('CSS_UNMINIFIED', location, 'Non-minified CSS', line=find_line_number_in_text(raw_content, '/*')))
         # Specificity graph (optional: print or save as CSV/JSON)
         # ...
     except Exception as e:
-        issues.append(('CSS_PARSING_ERROR', location, f"CSS parsing error: {str(e)}"))
+        issues.append(make_issue('CSS_PARSING_ERROR', location, f"CSS parsing error: {str(e)}", line=find_line_number_in_text(raw_content, '/*')))
     return issues
 
 # --- Advanced JS Analysis ---
-def analyze_js_content(content, location, options):
+def analyze_js_content(content, location, options, raw_content=None):
     issues = []
+    raw_content = raw_content or content
     try:
         pyjsparser.parse(content)
     except Exception as e:
-        issues.append(('JS_SYNTAX_ERROR', location, f"Syntax error: {str(e)}"))
+        issues.append(make_issue('JS_SYNTAX_ERROR', location, f"Syntax error: {str(e)}", line=find_line_number_in_text(raw_content, '/*')))
     # Deprecated APIs
     deprecated_apis = ['escape(', 'unescape(', 'document.all', 'document.layers']
     for api in deprecated_apis:
         if api in content:
-            issues.append(('JS_DEPRECATED_API', location, f"Deprecated API used: {api}"))
+            issues.append(make_issue('JS_DEPRECATED_API', location, f"Deprecated API used: {api}", line=find_line_number_in_text(raw_content, api)))
     # Performance: large bundles
     if len(content) > 200*1024:
-        issues.append(('JS_LARGE_BUNDLE', location, 'JS file > 200KB'))
+        issues.append(make_issue('JS_LARGE_BUNDLE', location, 'JS file > 200KB', line=find_line_number_in_text(raw_content, '/*')))
     # Synchronous XHR
     if re.search(r'open\s*\(\s*["\"][A-Z]+["\"]\s*,\s*[^,]+,\s*false', content):
-        issues.append(('JS_SYNC_XHR', location, 'Synchronous XHR detected'))
+        issues.append(make_issue('JS_SYNC_XHR', location, 'Synchronous XHR detected', line=find_line_number_in_text(raw_content, '/*')))
     # Blocking scripts
     if 'document.write' in content:
-        issues.append(('JS_BLOCKING_SCRIPT', location, 'document.write used'))
+        issues.append(make_issue('JS_BLOCKING_SCRIPT', location, 'document.write used', line=find_line_number_in_text(raw_content, '/*')))
     # Unused code: (not trivial, skip for now)
     # Modern syntax: (warn if ES6+ features detected)
     if re.search(r'=>|const |let |\bclass\b|\bimport\b|\bexport\b', content):
-        issues.append(('JS_MODERN_SYNTAX', location, 'Modern JS syntax detected'))
+        issues.append(make_issue('JS_MODERN_SYNTAX', location, 'Modern JS syntax detected', line=find_line_number_in_text(raw_content, '/*')))
     # ESLint integration (optional)
     if options.eslint and subprocess:
         try:
@@ -235,15 +353,16 @@ def analyze_js_content(content, location, options):
                 eslint_issues = json.loads(result.stdout)
                 for file_issues in eslint_issues:
                     for msg in file_issues.get('messages', []):
-                        issues.append(('JS_ESLINT', location, f"{msg.get('message')} (rule: {msg.get('ruleId')})"))
+                        issues.append(make_issue('JS_ESLINT', location, f"{msg.get('message')} (rule: {msg.get('ruleId')})", line=find_line_number_in_text(raw_content, msg.get('line'))))
             os.remove('temp_eslint.js')
         except Exception as e:
-            issues.append(('JS_ESLINT_ERROR', location, f"ESLint error: {str(e)}"))
+            issues.append(make_issue('JS_ESLINT_ERROR', location, f"ESLint error: {str(e)}", line=find_line_number_in_text(raw_content, '/*')))
     return issues
 
 # --- Dependency & Config Analysis ---
-def analyze_package_json(path):
+def analyze_package_json(path, raw_content=None):
     issues = []
+    raw_content = raw_content or path
     try:
         with open(path, encoding='utf-8') as f:
             pkg = json.load(f)
@@ -251,23 +370,24 @@ def analyze_package_json(path):
         for dep_type in ['dependencies', 'devDependencies']:
             for dep, ver in pkg.get(dep_type, {}).items():
                 if re.match(r'^[<>=~]?\d+\.\d+\.\d+$', ver) and ver.startswith(('0.', '1.0.', '2.0.')):
-                    issues.append(('PKG_OLD_DEP', path, f'{dep} version {ver} may be outdated'))
+                    issues.append(make_issue('PKG_OLD_DEP', path, f'{dep} version {ver} may be outdated', line=find_line_number_in_text(raw_content, '/*')))
                 if 'deprecated' in dep.lower():
-                    issues.append(('PKG_DEPRECATED_DEP', path, f'{dep} is deprecated'))
+                    issues.append(make_issue('PKG_DEPRECATED_DEP', path, f'{dep} is deprecated', line=find_line_number_in_text(raw_content, '/*')))
         # TODO: Integrate with npm audit or Snyk for real vulnerability scan
     except Exception as e:
-        issues.append(('PKG_PARSE_ERROR', path, f'package.json parse error: {str(e)}'))
+        issues.append(make_issue('PKG_PARSE_ERROR', path, f'package.json parse error: {str(e)}', line=find_line_number_in_text(raw_content, '/*')))
     return issues
 
-def analyze_env_file(path):
+def analyze_env_file(path, raw_content=None):
     issues = []
+    raw_content = raw_content or path
     try:
         with open(path, encoding='utf-8') as f:
             for line in f:
                 if re.search(r'(key|token|secret|password|api)[^=]*=', line, re.I):
-                    issues.append(('ENV_POTENTIAL_SECRET', path, f'Potential secret: {line.strip()}'))
+                    issues.append(make_issue('ENV_POTENTIAL_SECRET', path, f'Potential secret: {line.strip()}', line=find_line_number_in_text(raw_content, line)))
     except Exception as e:
-        issues.append(('ENV_PARSE_ERROR', path, f'.env parse error: {str(e)}'))
+        issues.append(make_issue('ENV_PARSE_ERROR', path, f'.env parse error: {str(e)}', line=find_line_number_in_text(raw_content, '/*')))
     return issues
 
 # --- Advanced Reporting ---
@@ -492,30 +612,63 @@ details code { background: none; padding: 0; }
             return html.escape(context)
 
         for i, issue in enumerate(issues, 1):
-            # Support both tuple and dict issue formats
             if isinstance(issue, dict):
                 issue_type = issue.get('type', '')
                 location = issue.get('location', '')
                 message = issue.get('message', '')
-                line = issue.get('line', '')
+                line = issue.get('line', 'N/A')
                 code_context = issue.get('context', '')
                 col = issue.get('column', '')
+                severity = issue.get('severity', 'Info')
+                # --- Make location clickable ---
+                if location.startswith('http://') or location.startswith('https://'):
+                    location_html = f'<a href="{html.escape(location)}" target="_blank">{html.escape(location)}</a>'
+                elif location and line != 'N/A' and str(location).endswith(('.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.py', '.php', '.json', '.md', '.txt', '.log')):
+                    abs_path = os.path.abspath(location)
+                    # VS Code URI scheme
+                    location_html = f'<a href="vscode://file/{abs_path}:{line}" title="Open in VS Code">{html.escape(location)}:{line}</a>'
+                elif location:
+                    location_html = html.escape(location)
+                else:
+                    location_html = '-'
             elif isinstance(issue, (list, tuple)) and len(issue) >= 3:
                 issue_type, location, message = issue[:3]
-                line = issue[3] if len(issue) > 3 else ''
+                line = issue[3] if len(issue) > 3 else '-'
                 code_context = issue[4] if len(issue) > 4 else ''
                 col = issue[5] if len(issue) > 5 else ''
-                issue = {'type': issue_type, 'location': location, 'message': message, 'line': line, 'context': code_context, 'column': col}
+                severity = 'Info'
+                issue = {'type': issue_type, 'location': location, 'message': message, 'line': line, 'context': code_context, 'column': col, 'severity': severity}
+                # --- Make location clickable ---
+                if location.startswith('http://') or location.startswith('https://'):
+                    location_html = f'<a href="{html.escape(location)}" target="_blank">{html.escape(location)}</a>'
+                elif location and line != 'N/A' and str(location).endswith(('.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.py', '.php', '.json', '.md', '.txt', '.log')):
+                    abs_path = os.path.abspath(location)
+                    # VS Code URI scheme
+                    location_html = f'<a href="vscode://file/{abs_path}:{line}" title="Open in VS Code">{html.escape(location)}:{line}</a>'
+                elif location:
+                    location_html = html.escape(location)
+                else:
+                    location_html = '-'
             else:
-                # fallback for unknown format
                 issue_type = str(issue)
                 location = ''
                 message = ''
-                line = ''
+                line = '-'
                 code_context = ''
                 col = ''
-                issue = {'type': issue_type, 'location': location, 'message': message, 'line': line, 'context': code_context, 'column': col}
-            sev = severity_map.get(issue_type, 'info')
+                severity = 'Info'
+                issue = {'type': issue_type, 'location': location, 'message': message, 'line': line, 'context': code_context, 'column': col, 'severity': severity}
+                # --- Make location clickable ---
+                if location.startswith('http://') or location.startswith('https://'):
+                    location_html = f'<a href="{html.escape(location)}" target="_blank">{html.escape(location)}</a>'
+                elif location and line != 'N/A' and str(location).endswith(('.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.py', '.php', '.json', '.md', '.txt', '.log')):
+                    abs_path = os.path.abspath(location)
+                    # VS Code URI scheme
+                    location_html = f'<a href="vscode://file/{abs_path}:{line}" title="Open in VS Code">{html.escape(location)}:{line}</a>'
+                elif location:
+                    location_html = html.escape(location)
+                else:
+                    location_html = '-'
             solution = ISSUE_SOLUTIONS.get(issue_type, lambda i: 'Refer to documentation or best practices for this issue.')(issue)
             autofix = AUTO_FIX.get(issue_type, lambda i: '')(issue)
             code_html = highlight_code_context(code_context, col)
@@ -523,10 +676,10 @@ details code { background: none; padding: 0; }
                 f"<tr>"
                 f"<td>{i}</td>"
                 f"<td>{html.escape(str(issue_type))}</td>"
-                f"<td>{html.escape(str(location))}</td>"
-                f"<td>{html.escape(str(line))}</td>"
+                f"<td>{location_html}</td>"
+                f"<td class='severity-{severity.upper()}'>{severity.title()}</td>"
+                f"<td>{line}</td>"
                 f"<td class='code-context'>{code_html}</td>"
-                f"<td class='severity-{sev.upper()}'>{sev.title()}</td>"
                 f"<td>{html.escape(str(message))}</td>"
                 f"<td class='solution'>{solution}</td>"
                 f"<td class='autofix'>{autofix}</td>"
@@ -637,22 +790,24 @@ def analyze_jsx_tsx_content(content, location, options):
                 eslint_issues = json.loads(result.stdout)
                 for file_issues in eslint_issues:
                     for msg in file_issues.get('messages', []):
-                        issues.append(('REACT_ESLINT' if ext in ['.jsx', '.tsx'] else 'TS_ESLINT', location, f"{msg.get('message')} (rule: {msg.get('ruleId')})"))
+                        issues.append(make_issue('REACT_ESLINT' if ext in ['.jsx', '.tsx'] else 'TS_ESLINT', location, f"{msg.get('message')} (rule: {msg.get('ruleId')})", line=find_line_number_in_text(content, msg.get('line'))))
             os.remove(temp_file)
         except Exception as e:
-            issues.append(('ESLINT_ERROR', location, f"ESLint error: {str(e)}"))
+            issues.append(make_issue('ESLINT_ERROR', location, f"ESLint error: {str(e)}", line=find_line_number_in_text(content, '/*')))
     # Heuristic checks for React
     if 'React.Component' in content or 'useState' in content or 'useEffect' in content:
         if re.search(r'<\w+\s+key=[^\s>]+', content) is None and re.search(r'\.map\(', content):
-            issues.append(('REACT_MISSING_KEY', location, 'Missing key prop in list rendering'))
+            pattern = r'\.map\('
+            line = find_line_number_in_text(content, pattern)
+            issues.append(make_issue('REACT_MISSING_KEY', location, 'Missing key prop in list rendering', line=line))
         if re.search(r'componentWillMount|componentWillReceiveProps|componentWillUpdate', content):
-            issues.append(('REACT_DEPRECATED_LIFECYCLE', location, 'Deprecated lifecycle method used'))
+            issues.append(make_issue('REACT_DEPRECATED_LIFECYCLE', location, 'Deprecated lifecycle method used', line=find_line_number_in_text(content, '/*')))
         if re.search(r'document\.getElementById|document\.querySelector', content):
-            issues.append(('REACT_DIRECT_DOM', location, 'Direct DOM manipulation in React'))
+            issues.append(make_issue('REACT_DIRECT_DOM', location, 'Direct DOM manipulation in React', line=find_line_number_in_text(content, '/*')))
     # Heuristic checks for Angular
     if '@Component' in content or 'NgModule' in content:
         if re.search(r'\*ngFor(?!.*trackBy)', content):
-            issues.append(('ANGULAR_MISSING_TRACKBY', location, 'Missing trackBy in *ngFor'))
+            issues.append(make_issue('ANGULAR_MISSING_TRACKBY', location, 'Missing trackBy in *ngFor', line=find_line_number_in_text(content, '/*')))
     return issues
 
 # --- Python/Flask Analysis ---
@@ -666,16 +821,22 @@ def analyze_python_content(content, location, options):
         result = subprocess.run(['flake8', temp_file, '--format=%(row)d:%(col)d: %(code)s %(text)s'], capture_output=True, text=True)
         if result.stdout:
             for line in result.stdout.splitlines():
-                issues.append(('PY_FLAKE8', location, line))
+                # Extract line/col if possible
+                m = re.match(r'^(\d+):(\d+): ([A-Z]\d+) (.*)$', line)
+                if m:
+                    row, col, code, text = m.groups()
+                    issues.append(make_issue('PY_FLAKE8', location, f'{code} {text}', line=row, column=col))
+                else:
+                    issues.append(make_issue('PY_FLAKE8', location, line, line=find_line_number_in_text(content, line)))
         os.remove(temp_file)
     except Exception as e:
-        issues.append(('PY_FLAKE8_ERROR', location, f'flake8 error: {str(e)}'))
+        issues.append(make_issue('PY_FLAKE8_ERROR', location, f'flake8 error: {str(e)}', line=find_line_number_in_text(content, '/*')))
     # Flask-specific
     if 'Flask(' in content:
         if 'debug=True' in content:
-            issues.append(('FLASK_DEBUG_MODE', location, 'Flask debug mode enabled'))
+            issues.append(make_issue('FLASK_DEBUG_MODE', location, 'Flask debug mode enabled', line=find_line_number_in_text(content, '/*')))
         if 'SECRET_KEY' in content and re.search(r'SECRET_KEY\s*=\s*["\"][^"\"]+["\"]', content):
-            issues.append(('FLASK_HARDCODED_SECRET', location, 'Hardcoded Flask SECRET_KEY'))
+            issues.append(make_issue('FLASK_HARDCODED_SECRET', location, 'Hardcoded Flask SECRET_KEY', line=find_line_number_in_text(content, '/*')))
     return issues
 
 # --- PHP Analysis ---
@@ -688,17 +849,17 @@ def analyze_php_content(content, location, options):
             f.write(content)
         result = subprocess.run(['php', '-l', temp_file], capture_output=True, text=True)
         if 'Parse error' in result.stdout or 'Parse error' in result.stderr:
-            issues.append(('PHP_PARSE_ERROR', location, result.stdout + result.stderr))
+            issues.append(make_issue('PHP_PARSE_ERROR', location, result.stdout + result.stderr, line=find_line_number_in_text(content, '/*')))
         os.remove(temp_file)
     except Exception as e:
-        issues.append(('PHP_LINT_ERROR', location, f'php -l error: {str(e)}'))
+        issues.append(make_issue('PHP_LINT_ERROR', location, f'php -l error: {str(e)}', line=find_line_number_in_text(content, '/*')))
     # Heuristic checks
     if 'eval(' in content:
-        issues.append(('PHP_EVAL', location, 'Use of eval()'))
+        issues.append(make_issue('PHP_EVAL', location, 'Use of eval()', line=find_line_number_in_text(content, '/*')))
     if re.search(r'mysql_\w+\(', content):
-        issues.append(('PHP_MYSQL_DEPRECATED', location, 'Use of deprecated mysql_* functions'))
+        issues.append(make_issue('PHP_MYSQL_DEPRECATED', location, 'Use of deprecated mysql_* functions', line=find_line_number_in_text(content, '/*')))
     if re.search(r'\$_(GET|POST|REQUEST|COOKIE)\[', content) and not re.search(r'htmlspecialchars|filter_var', content):
-        issues.append(('PHP_UNVALIDATED_INPUT', location, 'Potential unvalidated input'))
+        issues.append(make_issue('PHP_UNVALIDATED_INPUT', location, 'Potential unvalidated input', line=find_line_number_in_text(content, '/*')))
     return issues
 
 # --- Angular JSON Analysis ---
@@ -710,9 +871,23 @@ def analyze_angular_json_content(content, location, options):
             for proj, conf in data['projects'].items():
                 if 'architect' in conf and 'build' in conf['architect']:
                     if conf['architect']['build'].get('optimization') is False:
-                        issues.append(('ANGULAR_NO_OPTIMIZATION', location, f'Angular project {proj} has optimization disabled'))
+                        issues.append(make_issue('ANGULAR_NO_OPTIMIZATION', location, f'Angular project {proj} has optimization disabled', line=find_line_number_in_text(content, '/*')))
     except Exception as e:
-        issues.append(('ANGULAR_JSON_ERROR', location, f'angular.json parse error: {str(e)}'))
+        issues.append(make_issue('ANGULAR_JSON_ERROR', location, f'angular.json parse error: {str(e)}', line=find_line_number_in_text(content, '/*')))
+    return issues
+
+# --- Analyze generic text files for common issues ---
+def analyze_text_file(content, location, options):
+    issues = []
+    patterns = [
+        (re.compile(r'TODO|FIXME', re.I), 'TODO or FIXME found', 'TEXT_TODO_FIXME'),
+        (re.compile(r'(password|secret|token|key)[^=]*=', re.I), 'Possible secret or password assignment', 'TEXT_POTENTIAL_SECRET'),
+        (re.compile(r'\bdebug\b', re.I), 'Debug flag found', 'TEXT_DEBUG_FLAG'),
+    ]
+    for i, line in enumerate(content.splitlines(), 1):
+        for pattern, msg, issue_type in patterns:
+            if pattern.search(line):
+                issues.append(make_issue(issue_type, location, msg, line=i, context=line.strip()))
     return issues
 
 # --- Repo Analysis ---
@@ -732,11 +907,11 @@ def analyze_github_repo(repo_url, options):
                 except Exception:
                     continue
                 if ext in ['.html', '.jinja', '.j2'] and options.html:
-                    issues += analyze_html_content(content, path, options)
+                    issues += analyze_html_content(content, path, options, content)
                 elif ext in ['.css'] and options.css:
-                    issues += analyze_css_content(content, path, options)
+                    issues += analyze_css_content(content, path, options, content)
                 elif ext in ['.js'] and options.js:
-                    issues += analyze_js_content(content, path, options)
+                    issues += analyze_js_content(content, path, options, content)
                 elif ext in ['.jsx', '.tsx', '.ts'] and options.js:
                     issues += analyze_jsx_tsx_content(content, path, options)
                 elif ext == '.py':
@@ -744,11 +919,13 @@ def analyze_github_repo(repo_url, options):
                 elif ext == '.php':
                     issues += analyze_php_content(content, path, options)
                 elif file == 'package.json':
-                    issues += analyze_package_json(path)
+                    issues += analyze_package_json(path, content)
                 elif file == '.env':
-                    issues += analyze_env_file(path)
+                    issues += analyze_env_file(path, content)
                 elif file == 'angular.json':
                     issues += analyze_angular_json_content(content, path, options)
+                elif ext in ['.txt', '.md', '.log']:
+                    issues += analyze_text_file(content, path, options)
         return issues
     finally:
         shutil.rmtree(temp_dir)
@@ -780,7 +957,7 @@ class WebsiteAnalyzer:
             response.raise_for_status()
             return response.text
         except requests.RequestException as e:
-            self.issues.append(('NETWORK_ERROR', url, str(e)))
+            self.issues.append(make_issue('NETWORK_ERROR', url, str(e), line=get_line_for_network_error(self.html_content, url)))
             return None
 
     def _check_robots_txt(self):
@@ -789,7 +966,7 @@ class WebsiteAnalyzer:
         robots_url = f"{self.base_url}/robots.txt"
         robots = self._fetch_url(robots_url)
         if robots and "User-agent: *" in robots and "Disallow: /" in robots:
-            self.issues.append(('ROBOTS_DISALLOW', robots_url, "Blocked by robots.txt"))
+            self.issues.append(make_issue('ROBOTS_DISALLOW', robots_url, "Blocked by robots.txt", line=find_line_number_in_text(robots, "Disallow: /")))
 
     def analyze(self):
         self._check_robots_txt()
@@ -814,38 +991,40 @@ class WebsiteAnalyzer:
         for img in soup.find_all('img'):
             self.all_imgs.append(img)
             if not img.get('alt'):
-                self.issues.append(('HTML_MISSING_ALT', str(img), "Image missing alt text"))
+                tag_str = str(img)
+                line = find_line_number_in_text(self.html_content, tag_str)
+                self.issues.append(make_issue('HTML_MISSING_ALT', self.url, "Image missing alt text", line=line, context=tag_str))
         # Deprecated tags
         deprecated_tags = ['center', 'font', 'marquee']
         for tag in deprecated_tags:
             for found in soup.find_all(tag):
-                self.issues.append(('HTML_DEPRECATED_TAG', str(found), f"Deprecated HTML tag <{tag}> used"))
+                self.issues.append(make_issue('HTML_DEPRECATED_TAG', self.url, f"Deprecated HTML tag <{tag}> used", line=find_line_number_in_text(self.html_content, str(found)), context=str(found)))
         # Accessibility: missing aria
         for el in soup.find_all(True):
             if el.name in ['button', 'input', 'a'] and not any(attr.startswith('aria-') for attr in el.attrs):
-                self.issues.append(('HTML_MISSING_ARIA', str(el), f"<{el.name}> missing aria-* attribute"))
+                self.issues.append(make_issue('HTML_MISSING_ARIA', self.url, f"<{el.name}> missing aria-* attribute", line=find_line_number_in_text(self.html_content, str(el)), context=str(el)))
         # Accessibility: label/input
         for inp in soup.find_all('input'):
             if not inp.get('id') or not soup.find('label', attrs={'for': inp.get('id')}):
-                self.issues.append(('HTML_INPUT_NO_LABEL', str(inp), "Input missing associated <label>"))
+                self.issues.append(make_issue('HTML_INPUT_NO_LABEL', self.url, "Input missing associated <label>", line=find_line_number_in_text(self.html_content, str(inp)), context=str(inp)))
         # Accessibility: heading order
         headings = [int(h.name[1]) for h in soup.find_all(re.compile('^h[1-6]$'))]
         if headings:
             prev = 0
             for h in headings:
                 if prev and h > prev + 1:
-                    self.issues.append(('HTML_HEADING_ORDER', f"h{h}", "Skipped heading level"))
+                    self.issues.append(make_issue('HTML_HEADING_ORDER', self.url, "Skipped heading level", line=find_line_number_in_text(self.html_content, f"h{h}")))
                 prev = h
         # SEO: title, meta description, h1 count
         if not soup.find('title'):
-            self.issues.append(('SEO_MISSING_TITLE', self.url, "Missing <title> tag"))
+            self.issues.append(make_issue('SEO_MISSING_TITLE', self.url, "Missing <title> tag", line=find_line_number_in_text(self.html_content, '<title>'), context='<title>'))
         if not soup.find('meta', attrs={'name': 'description'}):
-            self.issues.append(('SEO_MISSING_DESCRIPTION', self.url, "Missing meta description"))
+            self.issues.append(make_issue('SEO_MISSING_DESCRIPTION', self.url, "Missing meta description", line=find_line_number_in_text(self.html_content, '<meta name="description"'), context='<meta name="description"'), context='<meta name="description"')
         h1s = soup.find_all('h1')
         if len(h1s) == 0:
-            self.issues.append(('SEO_MISSING_H1', self.url, "No <h1> tag found"))
+            self.issues.append(make_issue('SEO_MISSING_H1', self.url, "No <h1> tag found", line=find_line_number_in_text(self.html_content, '<h1>'), context='<h1>'))
         elif len(h1s) > 1:
-            self.issues.append(('SEO_MULTIPLE_H1', self.url, "Multiple <h1> tags found"))
+            self.issues.append(make_issue('SEO_MULTIPLE_H1', self.url, "Multiple <h1> tags found", line=find_line_number_in_text(self.html_content, '<h1>'), context='<h1>'))
         # Broken links
         for a in soup.find_all('a', href=True):
             href = a['href']
@@ -855,9 +1034,9 @@ class WebsiteAnalyzer:
             try:
                 r = self.session.head(href, allow_redirects=True, timeout=5)
                 if r.status_code >= 400:
-                    self.issues.append(('HTML_BROKEN_LINK', href, f"Broken link: {r.status_code}"))
+                    self.issues.append(make_issue('HTML_BROKEN_LINK', href, f"Broken link: {r.status_code}", line=find_line_number_in_text(self.html_content, str(a)), context=str(a)))
             except Exception as e:
-                self.issues.append(('HTML_BROKEN_LINK', href, f"Broken link: {str(e)}"))
+                self.issues.append(make_issue('HTML_BROKEN_LINK', href, f"Broken link: {str(e)}", line=find_line_number_in_text(self.html_content, str(a)), context=str(a)))
         for img in soup.find_all('img', src=True):
             src = img['src']
             if not is_absolute(src):
@@ -865,9 +1044,9 @@ class WebsiteAnalyzer:
             try:
                 r = self.session.head(src, allow_redirects=True, timeout=5)
                 if r.status_code >= 400:
-                    self.issues.append(('HTML_BROKEN_IMG', src, f"Broken image: {r.status_code}"))
+                    self.issues.append(make_issue('HTML_BROKEN_IMG', src, f"Broken image: {r.status_code}", line=find_line_number_in_text(self.html_content, str(img)), context=str(img)))
             except Exception as e:
-                self.issues.append(('HTML_BROKEN_IMG', src, f"Broken image: {str(e)}"))
+                self.issues.append(make_issue('HTML_BROKEN_IMG', src, f"Broken image: {str(e)}", line=find_line_number_in_text(self.html_content, str(img)), context=str(img)))
 
     # --- CSS Analysis ---
     def _analyze_styles(self):
@@ -900,26 +1079,26 @@ class WebsiteAnalyzer:
                     # !important
                     for prop in rule.style:
                         if '!important' in prop.value:
-                            self.issues.append(('CSS_IMPORTANT_OVERUSE', source, "Use of !important in CSS"))
+                            self.issues.append(make_issue('CSS_IMPORTANT_OVERUSE', source, "Use of !important in CSS", line=find_line_number_in_text(css_content, '/*')))
                     # Selector depth
                     selector = rule.selectorText
                     if self.options.max_selector_depth is not None:
                         depth = max(selector.count(' '), selector.count('>'))
                         if depth > self.options.max_selector_depth:
-                            self.issues.append(('CSS_COMPLEX_SELECTOR', source, f"Overly complex selector: {selector}"))
+                            self.issues.append(make_issue('CSS_COMPLEX_SELECTOR', source, f"Overly complex selector: {selector}", line=find_line_number_in_text(css_content, str(rule)), context=str(rule)))
                     # Vendor prefix
                     for prop in rule.style:
                         if prop.name.startswith('-webkit-') or prop.name.startswith('-moz-') or prop.name.startswith('-ms-'):
                             if not prop.name.startswith('--'):
-                                self.issues.append(('CSS_VENDOR_PREFIX', source, f"Vendor prefix used: {prop.name}"))
+                                self.issues.append(make_issue('CSS_VENDOR_PREFIX', source, f"Vendor prefix used: {prop.name}", line=find_line_number_in_text(css_content, str(rule)), context=str(rule)))
                     # Duplicate selectors
                     if selector in selectors_seen:
-                        self.issues.append(('CSS_DUPLICATE_SELECTOR', source, f"Duplicate selector: {selector}"))
+                        self.issues.append(make_issue('CSS_DUPLICATE_SELECTOR', source, f"Duplicate selector: {selector}", line=find_line_number_in_text(css_content, str(rule)), context=str(rule)))
                     selectors_seen.add(selector)
                     # Track selectors for unused check
                     self.used_selectors.add(selector)
         except Exception as e:
-            self.issues.append(('CSS_PARSING_ERROR', source, f"CSS parsing error: {str(e)}"))
+            self.issues.append(make_issue('CSS_PARSING_ERROR', source, f"CSS parsing error: {str(e)}", line=find_line_number_in_text(css_content, '/*')))
 
     def _check_unused_selectors(self):
         # Only works for external CSS
@@ -933,7 +1112,7 @@ class WebsiteAnalyzer:
                         # Only check simple selectors
                         if selector and not re.search(r'[\[\]:>~+]', selector):
                             if selector not in html:
-                                self.issues.append(('CSS_UNUSED_SELECTOR', css_url, f"Unused selector: {selector}"))
+                                self.issues.append(make_issue('CSS_UNUSED_SELECTOR', css_url, f"Unused selector: {selector}", line=find_line_number_in_text(css_content, str(rule)), context=str(rule)))
             except Exception:
                 pass
 
@@ -956,7 +1135,7 @@ class WebsiteAnalyzer:
         for el in soup.find_all(True):
             for attr in el.attrs:
                 if attr.startswith('on'):
-                    self.issues.append(('JS_INLINE_EVENT_HANDLER', str(el), f"Inline event handler: {attr}"))
+                    self.issues.append(make_issue('JS_INLINE_EVENT_HANDLER', self.url, f"Inline event handler: {attr}", line=find_line_number_in_text(self.html_content, str(el)), context=str(el)))
         # ESLint integration (optional)
         if self.options.eslint and subprocess:
             for js_url, js_content in self.external_js:
@@ -966,7 +1145,7 @@ class WebsiteAnalyzer:
         try:
             pyjsparser.parse(js_content)
         except Exception as e:
-            self.issues.append(('JS_SYNTAX_ERROR', source, f"Syntax error: {str(e)}"))
+            self.issues.append(make_issue('JS_SYNTAX_ERROR', source, f"Syntax error: {str(e)}", line=find_line_number_in_text(js_content, '/*')))
         # Dangerous patterns
         dangerous_patterns = {
             'eval': r'\beval\s*\(',
@@ -974,13 +1153,17 @@ class WebsiteAnalyzer:
             'document.write': r'document\.write\s*\('
         }
         for pattern_name, pattern in dangerous_patterns.items():
-            if re.search(pattern, js_content):
-                self.issues.append(('JS_DANGEROUS_FUNCTION', source, f"Use of {pattern_name} detected"))
+            for match in re.finditer(pattern, js_content):
+                line = find_line_number_in_text(js_content, match.group(0))
+                snippet = match.group(0)
+                self.issues.append(make_issue('JS_DANGEROUS_FUNCTION', source, f"Use of {pattern_name} detected", line=line, context=snippet))
         # Deprecated APIs
         deprecated_apis = ['escape(', 'unescape(', 'document.all', 'document.layers']
         for api in deprecated_apis:
-            if api in js_content:
-                self.issues.append(('JS_DEPRECATED_API', source, f"Deprecated API used: {api}"))
+            for match in re.finditer(api, js_content):
+                line = find_line_number_in_text(js_content, match.group(0))
+                snippet = match.group(0)
+                self.issues.append(make_issue('JS_DEPRECATED_API', source, f"Deprecated API used: {api}", line=line, context=snippet))
 
     def _eslint_check(self, js_content, source):
         try:
@@ -991,28 +1174,28 @@ class WebsiteAnalyzer:
                 eslint_issues = json.loads(result.stdout)
                 for file_issues in eslint_issues:
                     for msg in file_issues.get('messages', []):
-                        self.issues.append(('JS_ESLINT', source, f"{msg.get('message')} (rule: {msg.get('ruleId')})"))
+                        self.issues.append(make_issue('JS_ESLINT', source, f"{msg.get('message')} (rule: {msg.get('ruleId')})", line=find_line_number_in_text(js_content, msg.get('line'))))
             os.remove('temp_eslint.js')
         except Exception as e:
-            self.issues.append(('JS_ESLINT_ERROR', source, f"ESLint error: {str(e)}"))
+            self.issues.append(make_issue('JS_ESLINT_ERROR', source, f"ESLint error: {str(e)}", line=find_line_number_in_text(js_content, '/*')))
 
     # --- Performance & Security ---
     def _analyze_perfsec(self):
         # Large files
         for url, content in self.external_css + self.external_js:
             if len(content) > 100*1024:
-                self.issues.append(('PERF_LARGE_FILE', url, f"File size > 100KB ({len(content)} bytes)"))
+                self.issues.append(make_issue('PERF_LARGE_FILE', url, f"File size > 100KB ({len(content)} bytes)", line=find_line_number_in_text(content, '/*')))
         # Insecure requests
         for url, _ in self.external_css + self.external_js:
             if url.startswith('http://'):
-                self.issues.append(('SEC_INSECURE_REQUEST', url, "Insecure HTTP resource"))
+                self.issues.append(make_issue('SEC_INSECURE_REQUEST', url, "Insecure HTTP resource", line=find_line_number_in_text(self.html_content, '/*')))
         # Inline scripts/styles
         for script in self.soup.find_all('script', src=False):
             if script.string and len(script.string) > 100:
-                self.issues.append(('SEC_INLINE_SCRIPT', self.url, "Large inline script detected"))
+                self.issues.append(make_issue('SEC_INLINE_SCRIPT', self.url, "Large inline script detected", line=find_line_number_in_text(self.html_content, str(script)), context=str(script)))
         for style in self.soup.find_all('style'):
             if style.string and len(style.string) > 100:
-                self.issues.append(('SEC_INLINE_STYLE', self.url, "Large inline style detected"))
+                self.issues.append(make_issue('SEC_INLINE_STYLE', self.url, "Large inline style detected", line=find_line_number_in_text(self.html_content, str(style)), context=str(style)))
 
 # --- CLI ---
 def main():
