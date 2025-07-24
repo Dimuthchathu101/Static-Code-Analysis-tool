@@ -19,6 +19,7 @@ import csv
 import base64
 import math
 import mimetypes
+import html
 
 try:
     import subprocess
@@ -272,46 +273,48 @@ def analyze_env_file(path):
 # --- Advanced Reporting ---
 # --- Solutions for Issues ---
 ISSUE_SOLUTIONS = {
-    'PY_FLAKE8': 'Follow PEP8 guidelines. Use autopep8 or black to auto-format your code.',
-    'FLASK_DEBUG_MODE': 'Disable debug mode in production by setting debug=False.',
-    'SEO_MISSING_CANONICAL': 'Add a <link rel="canonical" href="..."> tag to your HTML <head>.',
-    'SEO_MISSING_OG': 'Add Open Graph meta tags (e.g., <meta property="og:title" ...>) to your HTML <head>.',
-    'SEO_MISSING_TWITTER': 'Add Twitter meta tags (e.g., <meta name="twitter:card" ...>) to your HTML <head>.',
-    'SEO_MISSING_ROBOTS': 'Add <meta name="robots" content="index,follow"> to your HTML <head>.',
-    'SEO_MISSING_SITEMAP': 'Add a <link rel="sitemap" href="/sitemap.xml"> to your HTML <head>.',
-    'SEO_MISSING_STRUCTURED': 'Add JSON-LD structured data using <script type="application/ld+json">.',
-    'SEO_MISSING_MICRODATA': 'Add microdata attributes (itemscope, itemtype) to your HTML.',
-    'SEO_MISSING_TITLE': 'Add a <title> tag to your HTML <head>.',
-    'SEO_MISSING_DESCRIPTION': 'Add a <meta name="description" content="..."> to your HTML <head>.',
-    'SEO_MISSING_H1': 'Add a single <h1> tag to each page.',
-    'HTML_UNMINIFIED_INLINE_SCRIPT': 'Minify your inline JavaScript using a tool like UglifyJS.',
-    'HTML_UNMINIFIED_INLINE_STYLE': 'Minify your inline CSS using a tool like cssnano.',
-    'HTML_IMG_NO_LAZY': 'Add loading="lazy" to <img> tags for better performance.',
-    'HTML_BROKEN_IMG': 'Fix or remove broken image links.',
-    'HTML_BROKEN_LINK': 'Fix or remove broken hyperlinks.',
-    'JS_MODERN_SYNTAX': 'Ensure your build process transpiles modern JS to ES5 for compatibility.',
-    'JS_SYNTAX_ERROR': 'Fix JavaScript syntax errors. Use ESLint or a modern IDE for help.',
-    'JS_DEPRECATED_API': 'Replace deprecated JS APIs with modern alternatives.',
-    'JS_LARGE_BUNDLE': 'Split large JS files into smaller chunks and use code splitting.',
-    'JS_BLOCKING_SCRIPT': 'Avoid using document.write and blocking scripts.',
-    'JS_DEPRECATED_LIFECYCLE': 'Update deprecated React lifecycle methods to modern hooks or methods.',
-    'REACT_MISSING_KEY': 'Add a unique key prop to each element in a list.',
-    'CSS_UNMINIFIED': 'Minify your CSS using a tool like cssnano.',
-    'CSS_LARGE_FILE': 'Split large CSS files and remove unused styles.',
-    'CSS_COMPLEX_SELECTOR': 'Simplify overly complex CSS selectors.',
-    'CSS_DEEP_SELECTOR': 'Avoid deep CSS selectors for better performance.',
-    'CSS_SPECIFICITY_WAR': 'Reduce selector specificity and avoid !important.',
-    'CSS_ID_SELECTOR': 'Avoid using IDs in CSS selectors; prefer classes.',
-    'CSS_NONSTANDARD_PROPERTY': 'Use standard CSS properties for better browser compatibility.',
-    'CSS_DUPLICATE_SELECTOR': 'Remove duplicate CSS selectors.',
-    'CSS_EXCESSIVE_IMPORT': 'Limit the use of @import in CSS; use build tools to combine files.',
-    'PKG_OLD_DEP': 'Update outdated dependencies in package.json using npm or yarn.',
-    'PKG_DEPRECATED_DEP': 'Replace deprecated dependencies with maintained alternatives.',
-    'PHP_LINT_ERROR': 'Fix PHP syntax errors. Use php -l for linting.',
-    'PHP_EVAL': 'Avoid using eval() in PHP for security and maintainability.',
-    'PHP_MYSQL_DEPRECATED': 'Replace deprecated mysql_* functions with mysqli or PDO.',
-    'PHP_UNVALIDATED_INPUT': 'Validate and sanitize all user input in PHP.',
-    # ... add more as needed ...
+    'NETWORK_ERROR': lambda issue: (
+        f"If the resource is required, ensure it exists at the specified URL: <code>{html.escape(str(issue.get('location', '')))}</code>. For robots.txt, create one at the site root if you want to control crawler access. Otherwise, you can ignore this warning."
+    ),
+    'HTML_MISSING_ALT': lambda issue: (
+        f"Add a descriptive alt attribute to the image: <br><code>{html.escape(str(issue.get('location', ''))).replace('>', ' alt=\"describe image here\">')}</code>"
+    ),
+    'HTML_MISSING_ARIA': lambda issue: (
+        f"Add an appropriate aria-label or aria-* attribute to the link: <br><code>{html.escape(str(issue.get('location', ''))).replace('>', ' aria-label=\"describe link purpose\">')}</code>"
+    ),
+    'HTML_HEADING_ORDER': lambda issue: (
+        f"Check heading order near: <code>{html.escape(str(issue.get('location', '')))}</code>. Use headings in order (e.g., <h2> should not be followed by <h4> without an <h3> in between)."
+    ),
+    'SEO_MISSING_DESCRIPTION': lambda issue: (
+        f"Add a meta description to your <head>: <br><code>&lt;meta name=\"description\" content=\"A brief description of your page.\"&gt;</code>"
+    ),
+    'HTML_BROKEN_LINK': lambda issue: (
+        f"Fix or remove the broken hyperlink: <code>{html.escape(str(issue.get('location', '')))}</code>. For <code>javascript:void(0);</code>, use <code>href=\"#\"</code> and prevent default action in JS. For 404/405 errors, ensure the link points to a valid resource."
+    ),
+    'CSS_COMPLEX_SELECTOR': lambda issue: (
+        f"Simplify this overly complex CSS selector: <br><code>{html.escape(str(issue.get('message', '')))}</code>"
+    ),
+    'CSS_VENDOR_PREFIX': lambda issue: (
+        f"Vendor prefix used: <code>{html.escape(str(issue.get('message', '')))}</code>. Use vendor prefixes only when necessary for browser compatibility. Consider using Autoprefixer to automate this."
+    ),
+    'CSS_DUPLICATE_SELECTOR': lambda issue: (
+        f"Remove or merge duplicate CSS selector: <code>{html.escape(str(issue.get('message', '')))}</code> to avoid redundancy."
+    ),
+    'CSS_UNUSED_SELECTOR': lambda issue: (
+        f"Remove unused selector: <code>{html.escape(str(issue.get('message', '')))}</code> if not used in your HTML."
+    ),
+    'JS_SYNTAX_ERROR': lambda issue: (
+        f"Fix JavaScript syntax errors. Example: <br><code>{html.escape(str(issue.get('message', '')))}</code><br>Use ES5-compatible syntax or transpile your JS with Babel for older browser support. Replace arrow functions with function expressions if needed."
+    ),
+    'SEC_INSECURE_REQUEST': lambda issue: (
+        f"Insecure HTTP resource: <code>{html.escape(str(issue.get('location', '')))}</code>. Use <code>https://</code> for all external resources (CSS, JS, images) to avoid mixed content warnings."
+    ),
+    'SEC_INLINE_SCRIPT': lambda issue: (
+        f"Move large inline scripts to external <code>.js</code> files for better caching and security."
+    ),
+    'SEC_INLINE_STYLE': lambda issue: (
+        f"Move large inline styles to external <code>.css</code> files for better caching and security."
+    ),
 }
 
 # --- Enhanced HTML Reporting ---
@@ -364,64 +367,229 @@ def generate_report(issues, output_format='plain'):
         # ... add more as needed ...
     }
     if output_format == 'html':
-        print("""
-<!DOCTYPE html>
+        html_lines = []
+        html_lines.append("""<!DOCTYPE html>
 <html lang='en'>
 <head>
 <meta charset='UTF-8'>
 <title>Static Analysis Report</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<link rel='preconnect' href='https://fonts.googleapis.com'>
+<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
+<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap' rel='stylesheet'>
+<script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
 <style>
-body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; margin: 0; padding: 0; }
-.container { max-width: 1100px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); padding: 32px; }
-h1 { color: #2c3e50; }
-table { width: 100%; border-collapse: collapse; margin-top: 24px; }
-th, td { padding: 12px 10px; border-bottom: 1px solid #eaeaea; }
-th { background: #f1f3f6; color: #34495e; }
-tr:hover { background: #f9fafb; }
-.severity-error { color: #e74c3c; font-weight: bold; }
-.severity-warning { color: #f39c12; font-weight: bold; }
-.severity-info { color: #2980b9; }
-.severity-critical { color: #c0392b; font-weight: bold; }
-.solution { color: #16a085; font-size: 0.98em; margin-top: 4px; }
-.summary { margin-top: 32px; background: #f1f3f6; border-radius: 8px; padding: 18px; }
+body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; background: #f4f6fa; margin: 0; padding: 0; }
+.header-bar { background: linear-gradient(90deg, #8a2be2 0%, #4f8cff 100%); color: #fff; padding: 24px 0 16px 0; box-shadow: 0 2px 12px rgba(138,43,226,0.08); text-align: center; }
+.header-bar h1 { margin: 0; font-size: 2.2rem; font-weight: 700; letter-spacing: 1px; }
+.container { max-width: 1200px; margin: 32px auto; background: #fff; border-radius: 18px; box-shadow: 0 4px 32px rgba(138,43,226,0.10); padding: 36px 24px 32px 24px; }
+#charts { display: flex; gap: 24px; margin-bottom: 32px; justify-content: center; flex-wrap: wrap; }
+#charts canvas { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(79,140,255,0.10); padding: 8px; width: 220px !important; height: 120px !important; max-width: 100vw; }
+#filter-bar { margin-bottom: 22px; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+#filter-bar label { margin-right: 0; font-weight: 600; color: #4f4f6f; }
+#filter-bar select { border-radius: 6px; border: 1px solid #d1d5db; padding: 6px 14px; font-size: 1em; background: #f8f9fb; color: #333; transition: border 0.2s; }
+#filter-bar select:focus { border: 1.5px solid #8a2be2; outline: none; }
+.copy-btn { background: linear-gradient(90deg, #8a2be2 0%, #4f8cff 100%); border: none; border-radius: 6px; padding: 6px 16px; cursor: pointer; margin-left: 8px; font-size: 1em; color: #fff; font-weight: 600; transition: background 0.2s; box-shadow: 0 1px 4px rgba(138,43,226,0.08); }
+.copy-btn:hover { background: linear-gradient(90deg, #4f8cff 0%, #8a2be2 100%); }
+.table-wrap { margin-top: 32px; border-radius: 16px; box-shadow: 0 2px 16px rgba(79,140,255,0.10); border: 1.5px solid #e1e4e8; overflow-x: auto; background: #f8f9fb; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 1.01em; border-radius: 16px; overflow: hidden; min-width: 900px; }
+th, td { padding: 13px 10px; border-bottom: 1px solid #e1e4e8; text-align: left; }
+th { background: linear-gradient(90deg, #8a2be2 0%, #4f8cff 100%); color: #fff; font-size: 1.08em; font-weight: 700; border-top-left-radius: 16px; border-top-right-radius: 16px; position: sticky; top: 0; z-index: 2; letter-spacing: 0.5px; }
+tr { transition: background 0.18s, transform 0.18s; }
+tr:nth-child(even) { background: linear-gradient(90deg, #f8f9fb 0%, #f4f6fa 100%); }
+tr:nth-child(odd) { background: #fff; }
+tr:hover { background: #e6eaff; transform: scale(1.012); box-shadow: 0 2px 8px rgba(79,140,255,0.08); }
+th:first-child { border-top-left-radius: 16px; }
+th:last-child { border-top-right-radius: 16px; }
+td { font-size: 0.99em; }
+.severity-LOW { color: #3498db; }
+.severity-MEDIUM { color: #f39c12; }
+.severity-HIGH { color: #e74c3c; font-weight: bold; }
+.severity-CRITICAL { color: #c0392b; font-weight: bold; }
+.solution { color: #16a085; font-size: 0.98em; }
+.autofix { color: #8e44ad; font-size: 0.97em; font-family: monospace; background: #f8f6ff; border-radius: 4px; padding: 4px 8px; display: block; margin-top: 4px; }
+.code-context { color: #2d3436; font-size: 0.97em; font-family: monospace; background: #f4f4f4; border-radius: 4px; padding: 4px 8px; display: block; margin-top: 4px; white-space: pre; }
+.code-highlight { background: #ffeaa7; color: #d35400; font-weight: bold; }
+.caret-highlight { color: #d35400; font-weight: bold; }
+details code { background: none; padding: 0; }
+@media (max-width: 900px) {
+  .container { padding: 12px 2vw; }
+  #charts { flex-direction: column; gap: 12px; }
+  #charts canvas { width: 98vw !important; max-width: 100vw; height: 120px !important; }
+  .table-wrap { margin-top: 18px; }
+  table, thead, tbody, th, td, tr { font-size: 0.97em; }
+  th, td { padding: 8px 4px; }
+}
+@media (max-width: 600px) {
+  .header-bar h1 { font-size: 1.3rem; }
+  .container { padding: 2vw 1vw; }
+  #charts canvas { width: 98vw !important; max-width: 100vw; height: 100px !important; }
+  .table-wrap { margin-top: 10px; }
+  table, thead, tbody, th, td, tr { font-size: 0.93em; }
+}
 </style>
 </head>
 <body>
+<div class='header-bar'><h1>Static Analysis Report</h1></div>
 <div class='container'>
-<h1>Static Code Analysis Report</h1>
-<p><b>Found {}</b> issues:</p>
-<table>
-<tr><th>#</th><th>Type</th><th>Location</th><th>Severity</th><th>Message</th><th>Solution</th></tr>
-""".format(len(issues)))
-        for i, (issue_type, location, message) in enumerate(issues, 1):
+<div id='charts'>
+  <canvas id='typeChart' width='220' height='120'></canvas>
+  <canvas id='severityChart' width='220' height='120'></canvas>
+</div>
+<div id='filter-bar'>
+  <label>Filter by Type: <select id='typeFilter'><option value=''>All</option></select></label>
+  <label>Filter by Severity: <select id='severityFilter'><option value=''>All</option></select></label>
+</div>
+<div class='table-wrap'>
+<table id='issues-table'>
+<thead><tr><th>#</th><th>Type</th><th>Location</th><th>Severity</th><th>Line</th><th>Code Context</th><th>Message</th><th>Solution</th><th>Auto-fix Suggestion</th></tr></thead>
+<tbody>""")
+        # --- Auto-fix suggestion lambdas ---
+        AUTO_FIX = {
+            'HTML_MISSING_ALT': lambda issue: (
+                html.escape(str(issue['location'])).replace('>', ' alt="describe image here">')
+            ),
+            'HTML_MISSING_ARIA': lambda issue: (
+                html.escape(str(issue['location'])).replace('>', ' aria-label="describe link purpose">')
+            ),
+            'SEO_MISSING_DESCRIPTION': lambda issue: (
+                '&lt;meta name="description" content="A brief description of your page."&gt;'
+            ),
+            'HTML_BROKEN_LINK': lambda issue: (
+                str(issue['location']).startswith('javascript:void(0)')
+                and '<a href="#" onclick="event.preventDefault();">...</a>'
+                or f'Check/fix: {html.escape(str(issue["location"]))}'
+            ),
+            'CSS_COMPLEX_SELECTOR': lambda issue: (
+                '/* Simplify selector: */\n' + html.escape(str(issue['message']))
+            ),
+            'CSS_DUPLICATE_SELECTOR': lambda issue: (
+                '/* Remove duplicate selector: */\n' + html.escape(str(issue['message']))
+            ),
+            'CSS_UNUSED_SELECTOR': lambda issue: (
+                '/* Remove unused selector: */\n' + html.escape(str(issue['message']))
+            ),
+            'JS_SYNTAX_ERROR': lambda issue: (
+                '/* Replace with ES5 function: */\nfunction foo() { ... }'
+            ),
+        }
+
+        def highlight_code_context(context, col):
+            if not context:
+                return ''
+            if col and str(col).isdigit():
+                col = int(col)
+                if 1 <= col <= len(context):
+                    # Highlight the character at col (1-based)
+                    before = html.escape(context[:col-1])
+                    highlight = f'<span class="code-highlight">{html.escape(context[col-1])}</span>'
+                    after = html.escape(context[col:])
+                    caret = f'<br><span class="caret-highlight">{"&nbsp;"*(col-1)}^</span>'
+                    return before + highlight + after + caret
+            # If context is long, use <details>
+            if len(context) > 80:
+                return f'<details><summary>Show code</summary><code>{html.escape(context)}</code></details>'
+            return html.escape(context)
+
+        for i, issue in enumerate(issues, 1):
+            # Support both tuple and dict issue formats
+            if isinstance(issue, dict):
+                issue_type = issue.get('type', '')
+                location = issue.get('location', '')
+                message = issue.get('message', '')
+                line = issue.get('line', '')
+                code_context = issue.get('context', '')
+                col = issue.get('column', '')
+            elif isinstance(issue, (list, tuple)) and len(issue) >= 3:
+                issue_type, location, message = issue[:3]
+                line = issue[3] if len(issue) > 3 else ''
+                code_context = issue[4] if len(issue) > 4 else ''
+                col = issue[5] if len(issue) > 5 else ''
+                issue = {'type': issue_type, 'location': location, 'message': message, 'line': line, 'context': code_context, 'column': col}
+            else:
+                # fallback for unknown format
+                issue_type = str(issue)
+                location = ''
+                message = ''
+                line = ''
+                code_context = ''
+                col = ''
+                issue = {'type': issue_type, 'location': location, 'message': message, 'line': line, 'context': code_context, 'column': col}
             sev = severity_map.get(issue_type, 'info')
-            solution = ISSUE_SOLUTIONS.get(issue_type, 'Refer to documentation or best practices for this issue.')
-            print("<tr>" +
-                  f"<td>{i}</td>" +
-                  f"<td>{issue_type}</td>" +
-                  f"<td><code>{location}</code></td>" +
-                  f"<td class='severity-{sev}'>{sev.capitalize()}</td>" +
-                  f"<td>{message}</td>" +
-                  f"<td class='solution'>{solution}</td>" +
-                  "</tr>")
-        print("""
-</table>
-<div class='summary'>
-<h2>Summary</h2>
-<ul>
-""")
-        stats = {}
-        for t, _, _ in issues:
-            stats[t] = stats.get(t, 0) + 1
-        for t, count in stats.items():
-            print(f"<li><b>{t}</b>: {count}</li>")
-        print("""
-</ul>
+            solution = ISSUE_SOLUTIONS.get(issue_type, lambda i: 'Refer to documentation or best practices for this issue.')(issue)
+            autofix = AUTO_FIX.get(issue_type, lambda i: '')(issue)
+            code_html = highlight_code_context(code_context, col)
+            html_lines.append(
+                f"<tr>"
+                f"<td>{i}</td>"
+                f"<td>{html.escape(str(issue_type))}</td>"
+                f"<td>{html.escape(str(location))}</td>"
+                f"<td>{html.escape(str(line))}</td>"
+                f"<td class='code-context'>{code_html}</td>"
+                f"<td class='severity-{sev.upper()}'>{sev.title()}</td>"
+                f"<td>{html.escape(str(message))}</td>"
+                f"<td class='solution'>{solution}</td>"
+                f"<td class='autofix'>{autofix}</td>"
+                f"</tr>"
+            )
+        html_lines.append("""
+</tbody></table>
 </div>
-</div>
-</body>
-</html>
-""")
+<script>
+// --- Chart.js Data ---
+let issues = """ + json.dumps(issues) + """;
+issues = issues.map(issue => {
+  if (!issue.type || issue.type === 'undefined') issue.type = 'Other';
+  if (!issue.severity || issue.severity === 'undefined') issue.severity = 'Info';
+  return issue;
+});
+const typeCounts = {};
+const severityCounts = {};
+issues.forEach(issue => {
+  typeCounts[issue.type] = (typeCounts[issue.type]||0)+1;
+  severityCounts[issue.severity] = (severityCounts[issue.severity]||0)+1;
+});
+const typeLabels = Object.keys(typeCounts).filter(l=>l!=='undefined');
+const typeData = typeLabels.map(l=>typeCounts[l]);
+const severityLabels = Object.keys(severityCounts).filter(l=>l!=='undefined');
+const severityData = severityLabels.map(l=>severityCounts[l]);
+new Chart(document.getElementById('typeChart').getContext('2d'), {
+  type: 'bar', data: {labels: typeLabels, datasets: [{label: 'Issues by Type', data: typeData, backgroundColor: '#8a2be2'}]}, options: {plugins: {legend: {display: false}}}
+});
+new Chart(document.getElementById('severityChart').getContext('2d'), {
+  type: 'pie', data: {labels: severityLabels, datasets: [{label: 'Issues by Severity', data: severityData, backgroundColor: ['#e67e22','#e74c3c','#f1c40f','#2ecc71','#3498db']}]}, options: {plugins: {legend: {position: 'bottom'}}}
+});
+// --- Filtering ---
+const typeFilter = document.getElementById('typeFilter');
+const severityFilter = document.getElementById('severityFilter');
+issues.forEach(issue => {
+  if(issue.type && issue.type !== 'undefined' && ![...typeFilter.options].some(o=>o.value===issue.type)){
+    let opt=document.createElement('option'); opt.value=issue.type; opt.text=issue.type; typeFilter.appendChild(opt);
+  }
+  if(issue.severity && issue.severity !== 'undefined' && ![...severityFilter.options].some(o=>o.value===issue.severity)){
+    let opt=document.createElement('option'); opt.value=issue.severity; opt.text=issue.severity; severityFilter.appendChild(opt);
+  }
+});
+function filterTable(){
+  let t=typeFilter.value, s=severityFilter.value;
+  document.querySelectorAll('#issues-table tbody tr').forEach(row=>{
+    let type=row.getAttribute('data-type'), sev=row.getAttribute('data-severity');
+    row.classList[(t&&type!==t)||(s&&sev!==s)?'add':'remove']('hide');
+  });
+}
+typeFilter.onchange=severityFilter.onchange=filterTable;
+// --- Copy Auto-fix ---
+document.querySelectorAll('.copy-btn').forEach(btn=>{
+  btn.onclick=function(){
+    let code=this.previousElementSibling.textContent;
+    navigator.clipboard.writeText(code);
+    this.textContent='Copied!';
+    setTimeout(()=>this.textContent='Copy Auto-fix',1200);
+  };
+});
+</script>
+</body></html>""")
+        print('\n'.join(html_lines))
         return
     elif output_format == 'json':
         print(json.dumps([
