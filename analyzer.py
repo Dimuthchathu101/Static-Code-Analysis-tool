@@ -537,7 +537,7 @@ details code { background: none; padding: 0; }
 </div>
 <script>
 // --- Chart.js Data ---
-let issues = """ + json.dumps(issues) + """;
+const issues = """ + json.dumps(issues) + """;
 issues = issues.map(issue => {
   if (!issue.type || issue.type === 'undefined') issue.type = 'Other';
   if (!issue.severity || issue.severity === 'undefined') issue.severity = 'Info';
